@@ -93,12 +93,26 @@ def main() -> None:
             current_index = load_command()
             continue
 
+        if raw == "print":
+            if current_index is None:
+                console.print("[red]No index loaded. Use 'build' or 'load' first.[/red]")
+            else:
+                console.print("[red]Please provide a word to print.[/red]")
+            continue
+
+        if raw == "find":
+            if current_index is None:
+                console.print("[red]No index loaded. Use 'build' or 'load' first.[/red]")
+            else:
+                console.print("[red]Please provide a non-empty query.[/red]")
+            continue
+
         if raw.startswith("print "):
             if current_index is None:
                 console.print("[red]No index loaded. Use 'build' or 'load' first.[/red]")
                 continue
 
-            term = raw[len("print ") :].strip()
+            term = raw[len("print "):].strip()
             print_term(current_index, term)
             continue
 
@@ -107,10 +121,9 @@ def main() -> None:
                 console.print("[red]No index loaded. Use 'build' or 'load' first.[/red]")
                 continue
 
-            query = raw[len("find ") :].strip()
+            query = raw[len("find "):].strip()
             find_query(current_index, query)
             continue
-
         console.print(
             "[yellow]Unknown command. Use: build, load, print <word>, find <query>, exit[/yellow]"
         )
