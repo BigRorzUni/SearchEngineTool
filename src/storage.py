@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from indexer import InvertedIndex
+from src.indexer import InvertedIndex
 
 
 def save_index(index: InvertedIndex, filepath: str) -> None:

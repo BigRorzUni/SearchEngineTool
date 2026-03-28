@@ -7,7 +7,9 @@ source venv/bin/activate   # macOS/Linux
 pip install -r requirements.txt
 
 ## Run
-python src/main.py
+```bash
+python -m src.main
+```
 
 ## Testing
 

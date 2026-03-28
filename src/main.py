@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from crawler import Crawler
-from indexer import InvertedIndex
-from search import find_query, print_term
-from storage import load_index, save_index
+from src.crawler import Crawler
+from src.indexer import InvertedIndex
+from src.search import find_query, print_term
+from src.storage import load_index, save_index
 
 
 BASE_URL = "https://quotes.toscrape.com/"
