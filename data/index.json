@@ -1,0 +1,59 @@
+{
+  "index": {
+    "hello": {
+      "doc_freq": 1,
+      "postings": {
+        "doc1": {
+          "term_freq": 2,
+          "positions": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "world": {
+      "doc_freq": 1,
+      "postings": {
+        "doc1": {
+          "term_freq": 1,
+          "positions": [
+            1
+          ]
+        }
+      }
+    },
+    "good": {
+      "doc_freq": 1,
+      "postings": {
+        "doc2": {
+          "term_freq": 1,
+          "positions": [
+            0
+          ]
+        }
+      }
+    },
+    "friends": {
+      "doc_freq": 1,
+      "postings": {
+        "doc2": {
+          "term_freq": 1,
+          "positions": [
+            1
+          ]
+        }
+      }
+    }
+  },
+  "documents": {
+    "doc1": {
+      "title": "Doc 1",
+      "word_count": 3
+    },
+    "doc2": {
+      "title": "Doc 2",
+      "word_count": 2
+    }
+  }
+}
