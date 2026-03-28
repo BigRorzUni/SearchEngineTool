@@ -3,7 +3,7 @@ from __future__ import annotations
 from rich.console import Console
 from rich.table import Table
 
-from src.indexer import InvertedIndex
+from indexer import InvertedIndex
 
 
 console = Console()
