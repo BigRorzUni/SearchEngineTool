@@ -83,7 +83,7 @@ def test_crawl_collects_documents_from_mocked_pages(requests_mock) -> None:
     </html>
     """
 
-    requests_mock.get("https://quotes.toscrape.com/", text=page_1)
+    requests_mock.get("https://quotes.toscrape.com/page/1/", text=page_1)
     requests_mock.get("https://quotes.toscrape.com/page/2/", text=page_2)
 
     crawler = Crawler("https://quotes.toscrape.com/", politeness_delay=0.0)
@@ -92,7 +92,7 @@ def test_crawl_collects_documents_from_mocked_pages(requests_mock) -> None:
     assert len(documents) == 2
 
     urls = [doc["url"] for doc in documents]
-    assert "https://quotes.toscrape.com/" in urls
+    assert "https://quotes.toscrape.com/page/1/" in urls
     assert "https://quotes.toscrape.com/page/2/" in urls
 
     combined_text = " ".join(doc["text"] for doc in documents)
@@ -116,11 +116,11 @@ def test_crawl_skips_failed_pages(requests_mock) -> None:
     </html>
     """
 
-    requests_mock.get("https://quotes.toscrape.com/", text=page_1)
+    requests_mock.get("https://quotes.toscrape.com/page/1/", text=page_1)
     requests_mock.get("https://quotes.toscrape.com/page/2/", status_code=404)
 
     crawler = Crawler("https://quotes.toscrape.com/", politeness_delay=0.0)
     documents = crawler.crawl()
 
     assert len(documents) == 1
-    assert documents[0]["url"] == "https://quotes.toscrape.com/"
+    assert documents[0]["url"] == "https://quotes.toscrape.com/page/1/"

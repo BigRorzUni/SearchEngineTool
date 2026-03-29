@@ -68,13 +68,12 @@ class Crawler:
         Restrict crawling to the main quote listing pages.
 
         Allowed:
-        - /
         - /page/<n>/
         """
         parsed = urlparse(url)
         path = parsed.path.rstrip("/")
 
-        return path == "" or path.startswith("/page")
+        return path.startswith("/page")
 
     def _extract_links(self, soup: BeautifulSoup, current_url: str) -> list[str]:
         links: list[str] = []
