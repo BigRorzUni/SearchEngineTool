@@ -51,6 +51,10 @@ class Crawler:
         parsed = urlparse(url)
         path = parsed.path or "/"
 
+        # treat homepage as page 1 to avoid duplicate indexing
+        if path == "/":
+            path = "/page/1/"
+
         if not path.endswith("/"):
             path += "/"
 
