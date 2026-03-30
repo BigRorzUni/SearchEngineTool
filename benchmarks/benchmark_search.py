@@ -24,7 +24,7 @@ QUERIES = [
     "the",
 ]
 
-RANKINGS = ["tf", "tfidf", "tfidf_proximity"]
+RANKINGS = ["tf", "tf_proximity", "tfidf", "tfidf_proximity"]
 
 # Warm up the interpreter and caches a little before measuring.
 WARMUP_RUNS = 100
@@ -40,7 +40,8 @@ def short_doc_name(url: str) -> str:
     if url.endswith("/page/1/"):
         return "page/1"
     if "/page/" in url:
-        return url.rstrip("/").split("/")[-2] + "/" + url.rstrip("/").split("/")[-1]
+        parts = url.rstrip("/").split("/")
+        return parts[-2] + "/" + parts[-1]
     return url.rstrip("/").split("/")[-1] or url
 
 
@@ -153,28 +154,33 @@ def print_top_results(index) -> None:
 
 def print_difference_analysis(index) -> None:
     """
-    Highlight where TF-IDF and proximity change the top-ranked result.
+    Highlight where ranking methods change the top-ranked result.
     """
     print("=== Ranking Difference Analysis ===\n")
 
     for query in QUERIES:
         tf_results = get_ranked_results(index, query, ranking="tf")
+        tf_prox_results = get_ranked_results(index, query, ranking="tf_proximity")
         tfidf_results = get_ranked_results(index, query, ranking="tfidf")
-        prox_results = get_ranked_results(index, query, ranking="tfidf_proximity")
+        tfidf_prox_results = get_ranked_results(index, query, ranking="tfidf_proximity")
 
         tf_top = short_doc_name(tf_results[0][0]) if tf_results else "None"
+        tf_prox_top = short_doc_name(tf_prox_results[0][0]) if tf_prox_results else "None"
         tfidf_top = short_doc_name(tfidf_results[0][0]) if tfidf_results else "None"
-        prox_top = short_doc_name(prox_results[0][0]) if prox_results else "None"
+        tfidf_prox_top = short_doc_name(tfidf_prox_results[0][0]) if tfidf_prox_results else "None"
 
+        changed_tf_prox = tf_top != tf_prox_top
         changed_tfidf = tf_top != tfidf_top
-        changed_prox = tfidf_top != prox_top
+        changed_tfidf_prox = tfidf_top != tfidf_prox_top
 
         print(f"Query: '{query}'")
-        print(f"  Top tf result:               {tf_top}")
-        print(f"  Top tfidf result:            {tfidf_top}")
-        print(f"  Top tfidf_proximity result:  {prox_top}")
-        print(f"  tf -> tfidf changed top rank:            {'yes' if changed_tfidf else 'no'}")
-        print(f"  tfidf -> tfidf_proximity changed top rank: {'yes' if changed_prox else 'no'}")
+        print(f"  Top tf result:                  {tf_top}")
+        print(f"  Top tf_proximity result:        {tf_prox_top}")
+        print(f"  Top tfidf result:               {tfidf_top}")
+        print(f"  Top tfidf_proximity result:     {tfidf_prox_top}")
+        print(f"  tf -> tf_proximity changed top rank:        {'yes' if changed_tf_prox else 'no'}")
+        print(f"  tf -> tfidf changed top rank:               {'yes' if changed_tfidf else 'no'}")
+        print(f"  tfidf -> tfidf_proximity changed top rank:  {'yes' if changed_tfidf_prox else 'no'}")
         print()
 
 
