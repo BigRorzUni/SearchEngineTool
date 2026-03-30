@@ -29,8 +29,10 @@ def get_ranked_results(
     if ranking == "tfidf":
         return index.rank_documents_by_tfidf(terms, matching_docs)
 
-    return index.rank_documents_by_term_frequency(terms, matching_docs)
+    if ranking == "tfidf_proximity":
+        return index.rank_documents_by_tfidf_with_proximity(terms, matching_docs)
 
+    return index.rank_documents_by_term_frequency(terms, matching_docs)
 
 def print_term(index: InvertedIndex, term: str) -> None:
     term = term.strip().lower()
@@ -75,6 +77,9 @@ def find_query(index: InvertedIndex, query: str, ranking: str = "tf") -> None:
     if ranking == "tfidf":
         score_label = "TF-IDF Score"
         title = f"Search results for: {' '.join(terms)} (ranking: tfidf)"
+    elif ranking == "tfidf_proximity":
+        score_label = "TF-IDF + Proximity"
+        title = f"Search results for: {' '.join(terms)} (ranking: tfidf_proximity)"
     else:
         score_label = "Score"
         title = f"Search results for: {' '.join(terms)} (ranking: tf)"
