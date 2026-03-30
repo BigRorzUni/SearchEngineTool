@@ -138,3 +138,37 @@ def test_to_dict_and_from_dict_round_trip() -> None:
 
     assert restored.index == index.index
     assert restored.documents == index.documents
+
+def test_document_count_returns_number_of_documents() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "hello world", "Doc 1")
+    index.add_document("doc2", "good friends", "Doc 2")
+
+    assert index.document_count() == 2
+
+
+def test_inverse_document_frequency_is_higher_for_rarer_terms() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "common rare", "Doc 1")
+    index.add_document("doc2", "common", "Doc 2")
+    index.add_document("doc3", "common", "Doc 3")
+
+    common_idf = index.inverse_document_frequency("common")
+    rare_idf = index.inverse_document_frequency("rare")
+
+    assert rare_idf > common_idf
+
+
+def test_rank_documents_by_tfidf_returns_ranked_results() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "good good friends", "Doc 1")
+    index.add_document("doc2", "good friends", "Doc 2")
+
+    docs = index.find_documents_containing_all(["good", "friends"])
+    ranked = index.rank_documents_by_tfidf(["good", "friends"], docs)
+
+    assert len(ranked) == 2
+    assert ranked[0][0] in {"doc1", "doc2"}
+    assert ranked[1][0] in {"doc1", "doc2"}
+    assert ranked[0][0] != ranked[1][0]
+    assert ranked[0][1] >= ranked[1][1]

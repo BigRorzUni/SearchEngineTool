@@ -69,3 +69,14 @@ def test_find_query_handles_empty_query(capsys) -> None:
     captured = capsys.readouterr()
 
     assert "Please provide a non-empty query." in captured.out
+
+def test_find_query_supports_tfidf_ranking(capsys) -> None:
+    index = build_test_index()
+
+    find_query(index, "good friends", ranking="tfidf")
+    captured = capsys.readouterr()
+
+    assert "Search results for: good friends" in captured.out
+    assert "TF-IDF Score" in captured.out
+    assert "doc1" in captured.out
+    assert "doc2" in captured.out
