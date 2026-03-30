@@ -66,7 +66,7 @@ def main() -> None:
     Run the command-line interface for the search tool.
     """
     console.print("[bold]Search Engine Tool[/bold]")
-    console.print("Commands: build, load, print <word>, find <query>, exit")
+    console.print("Commands: build, load, print <word>, find <query> [--tfidf], exit")
 
     current_index: InvertedIndex | None = None
 
@@ -121,9 +121,22 @@ def main() -> None:
                 console.print("[red]No index loaded. Use 'build' or 'load' first.[/red]")
                 continue
 
-            query = raw[len("find "):].strip()
-            find_query(current_index, query)
+            parts = raw.split()
+
+            # Default ranking
+            ranking = "tf"
+
+            # Check for optional flag
+            if "--tfidf" in parts:
+                ranking = "tfidf"
+                parts.remove("--tfidf")
+
+            # Reconstruct query
+            query = " ".join(parts[1:]).strip()
+
+            find_query(current_index, query, ranking=ranking)
             continue
+
         console.print(
             "[yellow]Unknown command. Use: build, load, print <word>, find <query>, exit[/yellow]"
         )

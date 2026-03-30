@@ -78,6 +78,7 @@ Returns:
 -   Matching documents
 -   Ranked by relevance (based on term frequency)
 -   Document titles
+- `find <query> --tfidf` – search using TF-IDF ranking
 
 ### exit
 Exits the program.
