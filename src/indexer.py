@@ -255,6 +255,39 @@ class InvertedIndex:
 
         return bonus
 
+    def rank_documents_by_tf_with_proximity(
+        self,
+        terms: list[str],
+        documents: list[str],
+        proximity_weight: float = 0.5,
+    ) -> list[tuple[str, float]]:
+        """
+        Rank documents by summed term frequency plus a proximity bonus.
+        """
+        scores: list[tuple[str, float]] = []
+
+        for doc in documents:
+            tf_score = 0.0
+
+            for term in terms:
+                term_data = self.index.get(term.lower())
+                if term_data is None:
+                    continue
+
+                posting = term_data["postings"].get(doc)
+                if posting is None:
+                    continue
+
+                tf_score += posting["term_freq"]
+
+            bonus = self.proximity_bonus(terms, doc)
+            total_score = tf_score + (proximity_weight * bonus)
+
+            scores.append((doc, total_score))
+
+        scores.sort(key=lambda item: (-item[1], item[0]))
+        return scores
+
     def rank_documents_by_tfidf_with_proximity(
         self,
         terms: list[str],
