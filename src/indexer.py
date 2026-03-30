@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+import math
 
 
 class InvertedIndex:
@@ -110,6 +111,66 @@ class InvertedIndex:
                 posting = term_data["postings"].get(doc)
                 if posting is not None:
                     score += posting["term_freq"]
+
+            scores.append((doc, score))
+
+        scores.sort(key=lambda item: (-item[1], item[0]))
+        return scores
+
+    def document_count(self) -> int:
+        """
+        Return the total number of indexed documents.
+        """
+        return len(self.documents)
+
+    def inverse_document_frequency(self, term: str) -> float:
+        """
+        Compute IDF for a term.
+
+        Uses log(1 + N / df) to avoid division issues and keep values stable.
+        """
+        term_data = self.index.get(term.lower())
+        if term_data is None:
+            return 0.0
+
+        df = term_data["doc_freq"]
+        if df == 0:
+            return 0.0
+
+        n_docs = self.document_count()
+        return math.log(1 + (n_docs / df))
+
+    def rank_documents_by_tfidf(
+        self,
+        terms: list[str],
+        documents: list[str],
+    ) -> list[tuple[str, float]]:
+        """
+        Rank documents by summed TF-IDF score for the query terms.
+        """
+        scores: list[tuple[str, float]] = []
+
+        for doc in documents:
+            score = 0.0
+            doc_meta = self.documents.get(doc, {})
+            doc_length = doc_meta.get("word_count", 0)
+
+            for term in terms:
+                term_data = self.index.get(term.lower())
+                if term_data is None:
+                    continue
+
+                posting = term_data["postings"].get(doc)
+                if posting is None:
+                    continue
+
+                term_freq = posting["term_freq"]
+
+                # Length-normalised term frequency
+                tf = term_freq / doc_length if doc_length > 0 else 0.0
+                idf = self.inverse_document_frequency(term)
+
+                score += tf * idf
 
             scores.append((doc, score))
 

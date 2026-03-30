@@ -38,9 +38,13 @@ def print_term(index: InvertedIndex, term: str) -> None:
     console.print(f"[cyan]Document frequency:[/cyan] {term_data['doc_freq']}")
 
 
-def find_query(index: InvertedIndex, query: str) -> None:
+def find_query(index: InvertedIndex, query: str, ranking: str = "tf") -> None:
     """
     Find documents containing all terms in the query and print ranked results.
+
+    ranking options:
+    - "tf": rank by total term frequency across query terms
+    - "tf-idf": rank by TF-IDF score
     """
     terms = InvertedIndex.tokenize(query)
 
@@ -56,16 +60,24 @@ def find_query(index: InvertedIndex, query: str) -> None:
         )
         return
 
-    ranked_docs = index.rank_documents_by_term_frequency(terms, matching_docs)
 
-    table = Table(title=f"Search results for: {' '.join(terms)}")
+    if ranking == "tfidf":
+        ranked_docs = index.rank_documents_by_tfidf(terms, matching_docs)
+        score_label = "TF-IDF Score"
+        title = f"Search results for: {' '.join(terms)} (ranking: tfidf)"
+    else:
+        ranked_docs = index.rank_documents_by_term_frequency(terms, matching_docs)
+        score_label = "Score"
+        title = f"Search results for: {' '.join(terms)} (ranking: tf)"
+
+    table = Table(title=title)
     table.add_column("Rank", justify="right")
-    table.add_column("Score", justify="right")
+    table.add_column(score_label, justify="right")
     table.add_column("Document")
     table.add_column("Title")
 
     for rank, (doc_url, score) in enumerate(ranked_docs, start=1):
         title = index.documents.get(doc_url, {}).get("title", "")
-        table.add_row(str(rank), str(score), doc_url, title)
+        table.add_row(str(rank), f"{score:.4f}" if isinstance(score, float) else str(score), doc_url, title)
 
     console.print(table)
