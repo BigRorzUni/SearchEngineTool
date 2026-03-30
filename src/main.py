@@ -66,7 +66,7 @@ def main() -> None:
     Run the command-line interface for the search tool.
     """
     console.print("[bold]Search Engine Tool[/bold]")
-    console.print("Commands: build, load, print <word>, find <query> [--tfidf], exit")
+    console.print("Commands: build, load, print <word>, find <query> [--tfidf | --tfidf-proximity], exit")
 
     current_index: InvertedIndex | None = None
 
@@ -127,7 +127,11 @@ def main() -> None:
             ranking = "tf"
 
             # Check for optional flag
-            if "--tfidf" in parts:
+            if "--tfidf-proximity" in parts:
+                ranking = "tfidf_proximity"
+                parts.remove("--tfidf-proximity")
+
+            elif "--tfidf" in parts:
                 ranking = "tfidf"
                 parts.remove("--tfidf")
 
