@@ -78,7 +78,10 @@ Returns:
 -   Matching documents
 -   Ranked by relevance (based on term frequency)
 -   Document titles
-- `find <query> --tfidf` – search using TF-IDF ranking
+- `find <query>` – search using term frequency (TF)
+- `find <query> --tfidf` – use TF-IDF ranking
+- `find <query> --proximity` – use TF + proximity
+- `find <query> --tfidf --proximity` – use TF-IDF + proximity
 
 ### exit
 Exits the program.
@@ -106,12 +109,14 @@ Running ```bash python src/main.py``` may not work correctly due to package impo
 
 ## Evaluation of Ranking Algorithms
 
-This project evaluates two ranking strategies for information retrieval:
+This project evaluates four ranking strategies for information retrieval:
 
-- **Term Frequency (TF)** — baseline approach using summed term frequency
-- **TF-IDF** — enhanced ranking incorporating inverse document frequency
+- **Term Frequency (TF)** — baseline approach using summed term frequency  
+- **TF + Proximity** — frequency-based ranking enhanced with positional proximity  
+- **TF-IDF** — ranking incorporating inverse document frequency  
+- **TF-IDF + Proximity** — ranking combining term rarity with positional proximity  
 
-The goal is to compare both **computational performance** and **retrieval quality**.
+The goal is to compare both **computational performance** and **retrieval quality**, and to analyse the trade-offs between algorithmic complexity and ranking effectiveness.
 
 ---
 
@@ -119,11 +124,11 @@ The goal is to compare both **computational performance** and **retrieval qualit
 
 A benchmark was conducted using a fixed set of representative queries:
 
-- Single-term queries: `life`, `friends`, `truth`, `books`
-- Multi-term queries: `love life`, `good friends`
-- Common-word query: `the`
+- Single-term queries: `life`, `truth`  
+- Multi-term queries: `good friends`, `love life`, `make life`, `life truth`, `friend life`  
+- Common-word query: `the`  
 
-Each query was executed **1000 times** to obtain stable timing measurements.
+Each query was executed **1000 times**, with additional warm-up runs to reduce caching and interpreter effects.
 
 Performance was measured using `time.perf_counter()` and averaged across runs.
 
@@ -131,19 +136,36 @@ Performance was measured using `time.perf_counter()` and averaged across runs.
 
 ### Computational Performance
 
-| Ranking Method | Average Time per Query |
-|---------------|----------------------|
-| TF            | 0.0069 ms            |
-| TF-IDF        | 0.0158 ms            |
+| Ranking Method      | Average Time per Query |
+|--------------------|------------------------|
+| TF                 | 0.0086 ms              |
+| TF + Proximity     | 0.0148 ms              |
+| TF-IDF             | 0.0120 ms              |
+| TF-IDF + Proximity | 0.0165 ms              |
 
-TF-IDF is approximately **2.3× slower** than the baseline TF approach.  
+Compared to the TF baseline:
+
+- **TF + Proximity** is approximately **1.71× slower**
+- **TF-IDF** is approximately **1.39× slower**
+- **TF-IDF + Proximity** is approximately **1.91× slower**
+
 This overhead arises from:
 
-- logarithmic IDF computation
-- floating-point arithmetic
-- length normalisation
+- logarithmic IDF computation  
+- floating-point arithmetic  
+- positional distance calculations for proximity scoring  
 
-However, absolute query times remain **extremely low (<0.02 ms)**, making the performance difference negligible for this dataset.
+However, all query times remain extremely small (**<0.02 ms per query**), meaning:
+
+- differences are negligible in practice  
+- interpreter overhead and system noise influence measurements  
+- all approaches are effectively instantaneous at this scale  
+
+From a theoretical perspective, the expected complexity relationship is:
+
+`TF < TF-IDF ≈ TF + Proximity < TF-IDF + Proximity`
+
+which broadly aligns with the observed timing trend.
 
 ---
 
@@ -153,68 +175,139 @@ However, absolute query times remain **extremely low (<0.02 ms)**, making the pe
 
 For the query `the`:
 
-- TF ranks documents purely by frequency
-- TF-IDF reduces the influence of this common term
+- TF ranks documents purely by raw frequency  
+- TF + Proximity behaves identically to TF, because proximity has no effect for single-term queries  
+- TF-IDF significantly reduces the influence of this common term  
+- TF-IDF + Proximity behaves identically to TF-IDF for the same reason  
 
-This demonstrates TF-IDF’s ability to **down-weight high-frequency, low-information terms**, improving result relevance.
-
----
-
-#### 2. Multi-Term Query Behaviour
-
-For the query `love life`:
-
-- TF prioritises documents with the highest raw counts
-- TF-IDF produces a different ranking that better reflects meaningful term combinations
-
-TF-IDF therefore provides improved **semantic relevance** for compound queries.
+This demonstrates TF-IDF’s ability to **down-weight high-frequency, low-information terms**, producing more meaningful rankings.
 
 ---
 
-#### 3. Relevance vs Frequency
+#### 2. Effect of Proximity Alone
+
+Introducing proximity without IDF allows the effect of positional information to be isolated.
+
+For example:
+
+- In `good friends`, TF ranks `page/2` above `page/6`
+- TF + Proximity preserves the same top-ranked document, but increases the score gap because `page/2` contains the terms closer together
+
+This shows that proximity can strengthen ranking confidence even when it does not change the final ordering.
+
+---
+
+#### 3. Multi-Term Query Behaviour
+
+For multi-term queries such as `love life` and `make life`:
+
+- TF prioritises documents with the highest raw counts  
+- TF + Proximity rewards documents where terms occur nearer each other  
+- TF-IDF produces rankings that better reflect meaningful combinations of terms by accounting for rarity  
+- TF-IDF + Proximity combines both effects, rewarding documents that are both informative and locally coherent  
+
+This improves **phrase-like query interpretation**.
+
+---
+
+#### 4. Proximity Effects
+
+The proximity-based ranking introduces a bonus based on the distance between query terms.
+
+- Documents where terms are closer together receive a higher score  
+- Documents with dispersed terms receive a smaller bonus  
+- For single-term queries, proximity has **no effect**, as no inter-term distance exists  
+
+For example:
+
+- In `make life`, TF-IDF ranks `page/5` highest  
+- With TF-IDF + Proximity, `page/2` becomes the top result  
+
+This demonstrates that proximity ranking can **change top-ranked documents** when term closeness is significant.
+
+---
+
+#### 5. Relevance vs Frequency
 
 For queries such as `life`:
 
-- TF favours documents with many occurrences
-- TF-IDF balances frequency with term distinctiveness across the corpus
+- TF strongly favours documents with repeated occurrences  
+- TF + Proximity does not change the ranking, because the query contains only one term  
+- TF-IDF balances frequency with term rarity, changing the top result from `page/2` to `page/10`  
+- TF-IDF + Proximity again matches TF-IDF for the same reason  
 
-This results in a more **informative ranking**, rather than simply rewarding repetition.
+This highlights that TF-IDF contributes most strongly when rarity matters, whereas proximity contributes most strongly on multi-term queries.
 
 ---
 
-#### 4. Discovery of Relevant Documents
+#### 6. Ranking Differences
 
-TF-IDF occasionally promotes documents that are not top-ranked under TF, indicating improved sensitivity to **informative term usage** rather than raw counts alone.
+Changes in top-ranked documents were observed:
+
+- **TF → TF + Proximity** did not change the top result for any benchmark query, but often increased score separation for multi-term queries  
+- **TF → TF-IDF** changed the top result for `life`, `love life`, `make life`, and `the`  
+- **TF-IDF → TF-IDF + Proximity** changed the top result for `make life`  
+
+Notably:
+
+- `life`: TF selects `page/2`, while TF-IDF selects `page/10`
+- `love life`: TF selects `page/2`, while TF-IDF selects `page/5`
+- `make life`: TF-IDF selects `page/5`, while TF-IDF + Proximity selects `page/2`
+
+This confirms that each method captures **different aspects of relevance**:
+
+- TF captures repetition  
+- Proximity captures local term relationships  
+- TF-IDF captures rarity  
+- TF-IDF + Proximity combines all three
 
 ---
 
 ### Trade-Off Analysis
 
-| Aspect              | TF (Baseline)        | TF-IDF                     |
-|--------------------|---------------------|----------------------------|
-| Computational cost | Very low            | Slightly higher            |
-| Implementation     | Simple              | Moderate complexity        |
-| Ranking quality    | Frequency-biased    | More semantically meaningful |
-| Handling common terms | Poor            | Strong                     |
-| Multi-term queries | Basic               | Improved                   |
+| Aspect               | TF (Baseline)     | TF + Proximity        | TF-IDF                     | TF-IDF + Proximity        |
+|----------------------|-------------------|-----------------------|----------------------------|---------------------------|
+| Computational cost   | Very low          | Higher                | Slightly higher            | Highest                   |
+| Implementation       | Simple            | Moderate              | Moderate                   | Most complex              |
+| Ranking quality      | Frequency-biased  | Better for multi-term queries | More semantically meaningful | Most context-aware     |
+| Handling common terms| Poor              | Poor                  | Strong                     | Strong                    |
+| Multi-term queries   | Basic             | Improved              | Improved                   | Strongest                 |
+| Use of positional data | None            | Full utilisation      | None                       | Full utilisation          |
 
 ---
 
 ### Conclusion
 
-While TF provides a fast and simple baseline, TF-IDF offers **significantly improved ranking quality** with only a negligible increase in computational cost.
+The baseline TF approach provides a fast and simple ranking method but suffers from strong frequency bias and poor handling of common terms.
 
-Therefore, TF-IDF represents a better overall trade-off for search relevance in this system.
+Adding proximity to TF improves sensitivity to local term relationships, but on this dataset it mainly affects score separation rather than final top-ranked documents.
+
+TF-IDF significantly improves ranking quality by incorporating term rarity, producing more meaningful results with minimal computational overhead.
+
+TF-IDF + Proximity further enhances retrieval performance by leveraging positional information to capture relationships between terms, improving multi-word query relevance and, in some cases, altering top-ranked results.
+
+Although the more advanced methods introduce additional computational complexity, benchmarking shows that their runtime cost remains negligible for this dataset. Therefore, the improved ranking quality justifies their use.
 
 ---
 
 ### Limitations
 
-- The dataset is small (10 pages), so performance differences are minimal
-- TF-IDF remains a **bag-of-words model**, ignoring word order and proximity
-- Further improvements could include:
-  - proximity-based ranking
-  - phrase search
-  - query expansion techniques
+- The dataset is small (10 documents), limiting observable performance differences  
+- Benchmark timings are influenced by measurement noise due to extremely small execution times  
+- TF-IDF remains a **bag-of-words model**, ignoring full phrase structure  
+- Proximity scoring considers only adjacent query terms  
+- On this dataset, TF + Proximity often strengthens score differences without changing final rankings  
 
-These enhancements are explored as potential future work.
+---
+
+### Future Work
+
+Potential improvements include:
+
+- exact phrase search  
+- more advanced proximity scoring models  
+- query expansion and synonym handling  
+- evaluation on larger datasets  
+- learning-based ranking approaches  
+
+These extensions would further improve retrieval quality and bring the system closer to real-world search engine behaviour.

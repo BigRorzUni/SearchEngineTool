@@ -80,3 +80,14 @@ def test_find_query_supports_tfidf_ranking(capsys) -> None:
     assert "TF-IDF Score" in captured.out
     assert "doc1" in captured.out
     assert "doc2" in captured.out
+
+def test_find_query_supports_tfidf_proximity_ranking(capsys) -> None:
+    index = build_test_index()
+
+    find_query(index, "good friends", ranking="tfidf_proximity")
+    captured = capsys.readouterr()
+
+    assert "Search results for: good friends" in captured.out
+    assert "tfidf_proximity" in captured.out
+    assert "doc1" in captured.out
+    assert "doc2" in captured.out

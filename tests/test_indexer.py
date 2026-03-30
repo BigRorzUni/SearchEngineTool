@@ -172,3 +172,30 @@ def test_rank_documents_by_tfidf_returns_ranked_results() -> None:
     assert ranked[1][0] in {"doc1", "doc2"}
     assert ranked[0][0] != ranked[1][0]
     assert ranked[0][1] >= ranked[1][1]
+
+def test_minimum_position_distance_returns_smallest_gap() -> None:
+    distance = InvertedIndex.minimum_position_distance([1, 10, 20], [3, 12, 30])
+    assert distance == 2
+
+
+def test_proximity_bonus_is_higher_when_terms_are_closer() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "good friends are here", "Doc 1")
+    index.add_document("doc2", "good are here friends", "Doc 2")
+
+    bonus_1 = index.proximity_bonus(["good", "friends"], "doc1")
+    bonus_2 = index.proximity_bonus(["good", "friends"], "doc2")
+
+    assert bonus_1 > bonus_2
+
+
+def test_rank_documents_by_tfidf_with_proximity_prefers_closer_terms() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "good friends are here", "Doc 1")
+    index.add_document("doc2", "good are here friends", "Doc 2")
+
+    docs = index.find_documents_containing_all(["good", "friends"])
+    ranked = index.rank_documents_by_tfidf_with_proximity(["good", "friends"], docs)
+
+    assert ranked[0][0] == "doc1"
+    assert ranked[0][1] > ranked[1][1]
