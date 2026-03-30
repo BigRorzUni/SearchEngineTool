@@ -9,10 +9,30 @@ from src.indexer import InvertedIndex
 console = Console()
 
 
+def get_ranked_results(
+    index: InvertedIndex,
+    query: str,
+    ranking: str = "tf",
+) -> list[tuple[str, int | float]]:
+    """
+    Return ranked results for a query without printing.
+    """
+    terms = InvertedIndex.tokenize(query)
+
+    if not terms:
+        return []
+
+    matching_docs = index.find_documents_containing_all(terms)
+    if not matching_docs:
+        return []
+
+    if ranking == "tfidf":
+        return index.rank_documents_by_tfidf(terms, matching_docs)
+
+    return index.rank_documents_by_term_frequency(terms, matching_docs)
+
+
 def print_term(index: InvertedIndex, term: str) -> None:
-    """
-    Print the inverted index entry for a single term.
-    """
     term = term.strip().lower()
 
     if not term:
@@ -39,34 +59,23 @@ def print_term(index: InvertedIndex, term: str) -> None:
 
 
 def find_query(index: InvertedIndex, query: str, ranking: str = "tf") -> None:
-    """
-    Find documents containing all terms in the query and print ranked results.
-
-    ranking options:
-    - "tf": rank by total term frequency across query terms
-    - "tf-idf": rank by TF-IDF score
-    """
     terms = InvertedIndex.tokenize(query)
 
     if not terms:
         console.print("[red]Please provide a non-empty query.[/red]")
         return
 
-    matching_docs = index.find_documents_containing_all(terms)
-
-    if not matching_docs:
+    ranked_docs = get_ranked_results(index, query, ranking)
+    if not ranked_docs:
         console.print(
             f"[yellow]No documents contain all query terms: {' '.join(terms)}[/yellow]"
         )
         return
 
-
     if ranking == "tfidf":
-        ranked_docs = index.rank_documents_by_tfidf(terms, matching_docs)
         score_label = "TF-IDF Score"
         title = f"Search results for: {' '.join(terms)} (ranking: tfidf)"
     else:
-        ranked_docs = index.rank_documents_by_term_frequency(terms, matching_docs)
         score_label = "Score"
         title = f"Search results for: {' '.join(terms)} (ranking: tf)"
 
@@ -77,7 +86,12 @@ def find_query(index: InvertedIndex, query: str, ranking: str = "tf") -> None:
     table.add_column("Title")
 
     for rank, (doc_url, score) in enumerate(ranked_docs, start=1):
-        title = index.documents.get(doc_url, {}).get("title", "")
-        table.add_row(str(rank), f"{score:.4f}" if isinstance(score, float) else str(score), doc_url, title)
+        title_text = index.documents.get(doc_url, {}).get("title", "")
+        if isinstance(score, float):
+            score_text = f"{score:.4f}"
+        else:
+            score_text = str(score)
+
+        table.add_row(str(rank), score_text, doc_url, title_text)
 
     console.print(table)
