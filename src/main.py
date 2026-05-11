@@ -8,7 +8,7 @@ from rich.table import Table
 
 from src.crawler import Crawler
 from src.indexer import InvertedIndex
-from src.search import find_query, print_term
+from src.search import find_query, get_ranked_results, print_term
 from src.storage import load_index, save_index
 
 
@@ -76,6 +76,10 @@ def show_help(current_index: InvertedIndex | None = None) -> None:
         "find <query> --tfidf --proximity",
         "Search using TF-IDF + proximity ranking.",
     )
+    commands.add_row(
+        "find <query> --compare",
+        "Compare TF, TF + proximity, TF-IDF, and TF-IDF + proximity rankings.",
+    )
     commands.add_row("help or ?", "Show this help menu.")
     commands.add_row("clear", "Clear the terminal.")
     commands.add_row("exit, quit, or q", "Exit the program.")
@@ -96,6 +100,10 @@ def show_help(current_index: InvertedIndex | None = None) -> None:
     examples.add_row(
         "find love life --tfidf --proximity",
         "Search using TF-IDF + proximity.",
+    )
+    examples.add_row(
+        "find love life --compare",
+        "Compare all ranking methods for the query.",
     )
 
     console.print(examples)
@@ -208,13 +216,17 @@ def parse_find_command(raw: str) -> tuple[str, str]:
     - find <query> --tfidf
     - find <query> --proximity
     - find <query> --tfidf --proximity
+    - find <query> --compare
     """
     parts = raw.split()
 
     use_tfidf = "--tfidf" in parts
     use_proximity = "--proximity" in parts
 
-    query_parts = [p for p in parts[1:] if p not in ("--tfidf", "--proximity")]
+    query_parts = [
+        p for p in parts[1:]
+        if p not in ("--tfidf", "--proximity", "--compare")
+    ]
     query = " ".join(query_parts).strip()
 
     if use_tfidf and use_proximity:
@@ -227,6 +239,52 @@ def parse_find_command(raw: str) -> tuple[str, str]:
         ranking = "tf"
 
     return query, ranking
+
+
+def compare_rankings(index: InvertedIndex, query: str) -> None:
+    """
+    Compare all ranking methods for a query.
+    """
+    rankings = [
+        ("TF", "tf"),
+        ("TF + Proximity", "tf_proximity"),
+        ("TF-IDF", "tfidf"),
+        ("TF-IDF + Proximity", "tfidf_proximity"),
+    ]
+
+    table = Table(title=f"Ranking comparison for: '{query}'")
+
+    table.add_column("Method", style="cyan", no_wrap=True)
+    table.add_column("Rank", justify="right")
+    table.add_column("Score", justify="right")
+    table.add_column("Document")
+    table.add_column("Title")
+
+    for method_index, (label, ranking) in enumerate(rankings):
+        results = get_ranked_results(index, query, ranking=ranking)[:3]
+
+        if not results:
+            table.add_row(label, "-", "-", "No results", "")
+        else:
+            for rank, (doc_url, score) in enumerate(results, start=1):
+                title = index.documents.get(doc_url, {}).get("title", "")
+                score_text = (
+                    f"{score:.4f}" if isinstance(score, float) else str(score)
+                )
+
+                table.add_row(
+                    label if rank == 1 else "",
+                    str(rank),
+                    score_text,
+                    doc_url,
+                    title,
+                )
+
+        # Add divider between ranking methods
+        if method_index < len(rankings) - 1:
+            table.add_section()
+
+    console.print(table)
 
 
 def get_prompt(current_index: InvertedIndex | None) -> str:
@@ -312,6 +370,16 @@ def main() -> None:
         if raw.startswith("find "):
             if current_index is None:
                 error("No index loaded. Use 'build' or 'load' first.")
+                continue
+
+            if "--compare" in raw.split():
+                query, _ = parse_find_command(raw)
+
+                if not query:
+                    error("Please provide a non-empty query.")
+                    continue
+
+                compare_rankings(current_index, query)
                 continue
 
             query, ranking = parse_find_command(raw)
