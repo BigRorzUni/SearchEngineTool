@@ -18,10 +18,12 @@ class Crawler:
         base_url: str,
         politeness_delay: float = 6.0,
         timeout: float = 10.0,
+        max_depth: int | None = None,
     ) -> None:
         self.base_url = self._normalise_url(base_url)
         self.politeness_delay = politeness_delay
         self.timeout = timeout
+        self.max_depth = max_depth
         self.console = Console()
         self.session = requests.Session()
         self._last_request_time: float | None = None
@@ -126,12 +128,12 @@ class Crawler:
         """
         Crawl the site and return a list of extracted documents.
 
-        Each document contains:
-        - url
-        - title
-        - text
+        max_depth controls how far links are followed:
+        - 0 indexes only the start page
+        - 1 indexes the start page and its direct links
+        - None means no depth limit
         """
-        queue = deque([self.base_url])
+        queue = deque([(self.base_url, 0)])
         seen: set[str] = {self.base_url}
         visited: set[str] = set()
         documents: list[dict[str, Any]] = []
@@ -139,7 +141,7 @@ class Crawler:
         progress = tqdm(desc="Crawling", unit="page")
 
         while queue:
-            url = queue.popleft()
+            url, depth = queue.popleft()
 
             if url in visited:
                 continue
@@ -160,13 +162,17 @@ class Crawler:
                     "url": url,
                     "title": title,
                     "text": text,
+                    "depth": depth,
                 }
             )
 
-            for link in self._extract_links(soup, url):
-                if link not in seen:
-                    queue.append(link)
-                    seen.add(link)
+            should_follow_links = self.max_depth is None or depth < self.max_depth
+
+            if should_follow_links:
+                for link in self._extract_links(soup, url):
+                    if link not in seen:
+                        queue.append((link, depth + 1))
+                        seen.add(link)
 
             progress.update(1)
 

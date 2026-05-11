@@ -8,20 +8,22 @@ from src.search import find_query, print_term
 from src.storage import load_index, save_index
 
 
+
+
 BASE_URL = "https://quotes.toscrape.com/"
 INDEX_PATH = "data/index.json"
 
 console = Console()
 
 
-def build_command() -> InvertedIndex:
+def build_command(max_depth: int | None = None) -> InvertedIndex:
     """
     Crawl the target site, build the index, save it to disk,
     and return the built index.
     """
     console.print("[bold cyan]Building index...[/bold cyan]")
 
-    crawler = Crawler(base_url=BASE_URL, politeness_delay=6.0)
+    crawler = Crawler(base_url=BASE_URL, politeness_delay=6.0, max_depth=max_depth)
     documents = crawler.crawl()
 
     index = InvertedIndex()
@@ -33,11 +35,15 @@ def build_command() -> InvertedIndex:
         )
 
     save_index(index, INDEX_PATH)
-
+    if max_depth is None:
+        console.print("[cyan]Depth limit: unlimited[/cyan]")
+    else:
+        console.print(f"[cyan]Depth limit: {max_depth}[/cyan]")
     console.print(f"[green]Index built and saved to {INDEX_PATH}[/green]")
     console.print(
         f"[green]Indexed {len(index.documents)} documents and {len(index.index)} unique terms.[/green]"
     )
+
 
     return index
 
@@ -66,7 +72,7 @@ def main() -> None:
     Run the command-line interface for the search tool.
     """
     console.print("[bold]Search Engine Tool[/bold]")
-    console.print("Commands: build, load, print <word>, find <query> [--tfidf] [--proximity], exit")
+    console.print("Commands: build [--depth N], load, print <word>, find <query> [--tfidf] [--proximity], exit")
 
     current_index: InvertedIndex | None = None
 
@@ -85,8 +91,32 @@ def main() -> None:
             console.print("[cyan]Goodbye.[/cyan]")
             break
 
-        if raw == "build":
-            current_index = build_command()
+        if raw.startswith("build"):
+            parts = raw.split()
+            max_depth: int | None = None
+
+            if len(parts) > 1:
+                if "--depth" not in parts:
+                    console.print("[red]Unknown build option. Use: build [--depth N][/red]")
+                    continue
+
+                depth_index = parts.index("--depth")
+
+                if depth_index + 1 >= len(parts):
+                    console.print("[red]Please provide a depth value after --depth.[/red]")
+                    continue
+
+                try:
+                    max_depth = int(parts[depth_index + 1])
+                except ValueError:
+                    console.print("[red]Depth must be an integer.[/red]")
+                    continue
+
+                if max_depth < 0:
+                    console.print("[red]Depth must be 0 or greater.[/red]")
+                    continue
+
+            current_index = build_command(max_depth=max_depth)
             continue
 
         if raw == "load":

@@ -124,3 +124,44 @@ def test_crawl_skips_failed_pages(requests_mock) -> None:
 
     assert len(documents) == 1
     assert documents[0]["url"] == "https://quotes.toscrape.com/page/1/"
+
+def test_crawl_respects_max_depth(requests_mock) -> None:
+    page_1 = """
+    <html>
+      <head><title>Page 1</title></head>
+      <body>
+        <div class="quote">
+          <span class="text">“Quote one.”</span>
+          <small class="author">Author One</small>
+        </div>
+        <a href="/page/2/">Next</a>
+      </body>
+    </html>
+    """
+
+    page_2 = """
+    <html>
+      <head><title>Page 2</title></head>
+      <body>
+        <div class="quote">
+          <span class="text">“Quote two.”</span>
+          <small class="author">Author Two</small>
+        </div>
+      </body>
+    </html>
+    """
+
+    requests_mock.get("https://quotes.toscrape.com/page/1/", text=page_1)
+    requests_mock.get("https://quotes.toscrape.com/page/2/", text=page_2)
+
+    crawler = Crawler(
+        "https://quotes.toscrape.com/",
+        politeness_delay=0.0,
+        max_depth=0,
+    )
+
+    documents = crawler.crawl()
+
+    assert len(documents) == 1
+    assert documents[0]["url"] == "https://quotes.toscrape.com/page/1/"
+    assert documents[0]["depth"] == 0

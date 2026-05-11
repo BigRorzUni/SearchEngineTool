@@ -43,6 +43,11 @@ Crawls the target website, builds the inverted index, and saves it to disk.
 ```bash
 > build
 ```
+Optionally a max traversal depth can be specified
+```bash
+> build --depth 0
+> build --depth 3
+```
 -   Fetches all pages
 -   Extracts text content
 -   Builds an inverted index
