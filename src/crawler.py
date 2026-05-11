@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 from requests import Response
 from rich.console import Console
-from tqdm import tqdm
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 
 class Crawler:
@@ -53,7 +53,7 @@ class Crawler:
         parsed = urlparse(url)
         path = parsed.path or "/"
 
-        # treat homepage as page 1 to avoid duplicate indexing
+        # Treat homepage as page 1 to avoid duplicate indexing.
         if path == "/":
             path = "/page/1/"
 
@@ -138,43 +138,61 @@ class Crawler:
         visited: set[str] = set()
         documents: list[dict[str, Any]] = []
 
-        progress = tqdm(desc="Crawling", unit="page")
-
-        while queue:
-            url, depth = queue.popleft()
-
-            if url in visited:
-                continue
-
-            visited.add(url)
-
-            response = self._get(url)
-            if response is None:
-                progress.update(1)
-                continue
-
-            soup = BeautifulSoup(response.text, "lxml")
-            title = soup.title.get_text(strip=True) if soup.title else url
-            text = self._extract_visible_text(soup)
-
-            documents.append(
-                {
-                    "url": url,
-                    "title": title,
-                    "text": text,
-                    "depth": depth,
-                }
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold cyan]{task.description}[/bold cyan]"),
+            TextColumn("•"),
+            TextColumn("[dim]{task.fields[current_url]}[/dim]"),
+            TextColumn("•"),
+            TextColumn("{task.completed} pages"),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            console=self.console,
+            transient=False,
+            refresh_per_second=8,
+        ) as progress:
+            task = progress.add_task(
+                "Crawling",
+                total=None,
+                current_url="starting...",
             )
 
-            should_follow_links = self.max_depth is None or depth < self.max_depth
+            while queue:
+                url, depth = queue.popleft()
 
-            if should_follow_links:
-                for link in self._extract_links(soup, url):
-                    if link not in seen:
-                        queue.append((link, depth + 1))
-                        seen.add(link)
+                if url in visited:
+                    continue
 
-            progress.update(1)
+                visited.add(url)
 
-        progress.close()
+                progress.update(task, current_url=url)
+
+                response = self._get(url)
+                if response is None:
+                    progress.advance(task)
+                    continue
+
+                soup = BeautifulSoup(response.text, "lxml")
+                title = soup.title.get_text(strip=True) if soup.title else url
+                text = self._extract_visible_text(soup)
+
+                documents.append(
+                    {
+                        "url": url,
+                        "title": title,
+                        "text": text,
+                        "depth": depth,
+                    }
+                )
+
+                should_follow_links = self.max_depth is None or depth < self.max_depth
+
+                if should_follow_links:
+                    for link in self._extract_links(soup, url):
+                        if link not in seen:
+                            queue.append((link, depth + 1))
+                            seen.add(link)
+
+                progress.advance(task)
+
         return documents
