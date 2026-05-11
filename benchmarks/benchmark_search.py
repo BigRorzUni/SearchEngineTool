@@ -5,14 +5,16 @@ import time
 from pathlib import Path
 from typing import Iterable
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 from src.search import get_ranked_results
 from src.storage import load_index
 
 
 INDEX_PATH = "data/index.json"
 
-# Include both single-term and multi-term queries.
-# Proximity only affects multi-term queries, so those should dominate the analysis.
 QUERIES = [
     "life",
     "truth",
@@ -26,17 +28,20 @@ QUERIES = [
 
 RANKINGS = ["tf", "tf_proximity", "tfidf", "tfidf_proximity"]
 
-# Warm up the interpreter and caches a little before measuring.
-WARMUP_RUNS = 100
+RANKING_LABELS = {
+    "tf": "TF",
+    "tf_proximity": "TF + Proximity",
+    "tfidf": "TF-IDF",
+    "tfidf_proximity": "TF-IDF + Proximity",
+}
 
-# Number of timed repetitions per query/ranking pair.
+WARMUP_RUNS = 100
 REPETITIONS = 1000
+
+console = Console()
 
 
 def short_doc_name(url: str) -> str:
-    """
-    Convert a quotes.toscrape URL into a short page label for readable output.
-    """
     if url.endswith("/page/1/"):
         return "page/1"
     if "/page/" in url:
@@ -52,9 +57,6 @@ def format_score(score: int | float) -> str:
 
 
 def warmup(index, queries: Iterable[str], rankings: Iterable[str], runs: int) -> None:
-    """
-    Warm up the code paths before measuring timings.
-    """
     for _ in range(runs):
         for query in queries:
             for ranking in rankings:
@@ -62,9 +64,6 @@ def warmup(index, queries: Iterable[str], rankings: Iterable[str], runs: int) ->
 
 
 def benchmark_query(index, query: str, ranking: str, repetitions: int) -> dict[str, float]:
-    """
-    Benchmark one query/ranking pair and return timing statistics in milliseconds.
-    """
     timings_ms: list[float] = []
 
     for _ in range(repetitions):
@@ -82,106 +81,161 @@ def benchmark_query(index, query: str, ranking: str, repetitions: int) -> dict[s
     }
 
 
-def print_timing_table(results: dict[str, dict[str, dict[str, float]]]) -> None:
-    """
-    Print a readable timing summary for each ranking algorithm.
-    """
-    print("=== Timing Results (ms/query) ===\n")
+def average_mean(results: dict[str, dict[str, dict[str, float]]], ranking: str) -> float:
+    return statistics.mean(stats["mean"] for stats in results[ranking].values())
 
-    for ranking, query_stats in results.items():
-        print(f"--- {ranking.upper()} ---")
-        print(
-            f"{'Query':<18} {'Mean':>10} {'Median':>10} {'Min':>10} {'Max':>10} {'Std Dev':>10}"
+
+def print_header(index) -> None:
+    console.print(
+        Panel.fit(
+            f"[bold cyan]Ranking Benchmark[/bold cyan]\n"
+            f"Documents: [green]{len(index.documents)}[/green]\n"
+            f"Terms: [green]{len(index.index)}[/green]\n"
+            f"Queries: [green]{len(QUERIES)}[/green]\n"
+            f"Repetitions: [green]{REPETITIONS}[/green]\n"
+            f"Warm-up runs: [green]{WARMUP_RUNS}[/green]",
+            border_style="cyan",
+        )
+    )
+
+
+def print_timing_summary(results: dict[str, dict[str, dict[str, float]]]) -> None:
+    table = Table(title="Timing Summary")
+    table.add_column("Ranking Method", style="cyan", no_wrap=True)
+    table.add_column("Average Mean", justify="right")
+    table.add_column("Median of Medians", justify="right")
+    table.add_column("Avg Std Dev", justify="right")
+    table.add_column("Slowdown vs TF", justify="right")
+
+    tf_avg = average_mean(results, "tf")
+
+    for ranking in RANKINGS:
+        query_stats = results[ranking]
+        avg_mean = statistics.mean(stats["mean"] for stats in query_stats.values())
+        median_of_medians = statistics.median(
+            stats["median"] for stats in query_stats.values()
+        )
+        avg_stdev = statistics.mean(stats["stdev"] for stats in query_stats.values())
+        slowdown = avg_mean / tf_avg if tf_avg > 0 else float("inf")
+
+        slowdown_text = "baseline" if ranking == "tf" else f"{slowdown:.2f}x"
+
+        table.add_row(
+            RANKING_LABELS[ranking],
+            f"{avg_mean:.4f} ms",
+            f"{median_of_medians:.4f} ms",
+            f"{avg_stdev:.4f} ms",
+            slowdown_text,
         )
 
-        means: list[float] = []
+    console.print(table)
 
-        for query, stats in query_stats.items():
-            means.append(stats["mean"])
-            print(
-                f"{query:<18} "
-                f"{stats['mean']:>10.4f} "
-                f"{stats['median']:>10.4f} "
-                f"{stats['min']:>10.4f} "
-                f"{stats['max']:>10.4f} "
-                f"{stats['stdev']:>10.4f}"
+
+def print_timing_details(results: dict[str, dict[str, dict[str, float]]]) -> None:
+    for ranking in RANKINGS:
+        table = Table(title=f"Detailed Timings: {RANKING_LABELS[ranking]}")
+        table.add_column("Query", style="cyan")
+        table.add_column("Mean", justify="right")
+        table.add_column("Median", justify="right")
+        table.add_column("Min", justify="right")
+        table.add_column("Max", justify="right")
+        table.add_column("Std Dev", justify="right")
+
+        for query, stats in results[ranking].items():
+            table.add_row(
+                query,
+                f"{stats['mean']:.4f}",
+                f"{stats['median']:.4f}",
+                f"{stats['min']:.4f}",
+                f"{stats['max']:.4f}",
+                f"{stats['stdev']:.4f}",
             )
 
-        avg_mean = statistics.mean(means)
-        print(f"\n{'Average mean':<18} {avg_mean:>10.4f}\n")
-
-
-def print_relative_speed_summary(results: dict[str, dict[str, dict[str, float]]]) -> None:
-    """
-    Compare average mean query times across ranking strategies.
-    """
-    avg_means = {
-        ranking: statistics.mean(stats["mean"] for stats in query_stats.values())
-        for ranking, query_stats in results.items()
-    }
-
-    print("=== Relative Speed Summary ===\n")
-    for ranking, avg in avg_means.items():
-        print(f"{ranking:<18} {avg:.4f} ms/query")
-
-    baseline = avg_means["tf"]
-    print()
-    for ranking, avg in avg_means.items():
-        if ranking == "tf":
-            continue
-        slowdown = avg / baseline if baseline > 0 else float("inf")
-        print(f"{ranking:<18} is {slowdown:.2f}x slower than tf")
-    print()
+        console.print(table)
 
 
 def print_top_results(index) -> None:
-    """
-    Print top-3 results per query for each ranking method.
-    """
-    print("=== Example Top Results (Top 3) ===\n")
-
     for query in QUERIES:
-        print(f"Query: '{query}'")
-        for ranking in RANKINGS:
+        table = Table(title=f"Top Results: '{query}'")
+        table.add_column("Method", style="cyan", no_wrap=True)
+        table.add_column("Rank", justify="right")
+        table.add_column("Score", justify="right")
+        table.add_column("Document")
+
+        for method_index, ranking in enumerate(RANKINGS):
             results = get_ranked_results(index, query, ranking=ranking)[:3]
-            formatted = [
-                (short_doc_name(doc), format_score(score))
-                for doc, score in results
-            ]
-            print(f"  {ranking:<18} {formatted}")
-        print()
+
+            if not results:
+                table.add_row(RANKING_LABELS[ranking], "-", "-", "No results")
+            else:
+                for rank, (doc, score) in enumerate(results, start=1):
+                    table.add_row(
+                        RANKING_LABELS[ranking] if rank == 1 else "",
+                        str(rank),
+                        format_score(score),
+                        short_doc_name(doc),
+                    )
+
+            if method_index < len(RANKINGS) - 1:
+                table.add_section()
+
+        console.print(table)
 
 
 def print_difference_analysis(index) -> None:
-    """
-    Highlight where ranking methods change the top-ranked result.
-    """
-    print("=== Ranking Difference Analysis ===\n")
+    table = Table(title="Top-Rank Difference Analysis")
+    table.add_column("Query", style="cyan")
+    table.add_column("TF", justify="center")
+    table.add_column("TF + Prox", justify="center")
+    table.add_column("TF-IDF", justify="center")
+    table.add_column("TF-IDF + Prox", justify="center")
+    table.add_column("Changes", justify="center")
 
     for query in QUERIES:
-        tf_results = get_ranked_results(index, query, ranking="tf")
-        tf_prox_results = get_ranked_results(index, query, ranking="tf_proximity")
-        tfidf_results = get_ranked_results(index, query, ranking="tfidf")
-        tfidf_prox_results = get_ranked_results(index, query, ranking="tfidf_proximity")
+        tops: dict[str, str] = {}
 
-        tf_top = short_doc_name(tf_results[0][0]) if tf_results else "None"
-        tf_prox_top = short_doc_name(tf_prox_results[0][0]) if tf_prox_results else "None"
-        tfidf_top = short_doc_name(tfidf_results[0][0]) if tfidf_results else "None"
-        tfidf_prox_top = short_doc_name(tfidf_prox_results[0][0]) if tfidf_prox_results else "None"
+        for ranking in RANKINGS:
+            results = get_ranked_results(index, query, ranking=ranking)
+            tops[ranking] = short_doc_name(results[0][0]) if results else "None"
 
-        changed_tf_prox = tf_top != tf_prox_top
-        changed_tfidf = tf_top != tfidf_top
-        changed_tfidf_prox = tfidf_top != tfidf_prox_top
+        changes = []
+        if tops["tf"] != tops["tf_proximity"]:
+            changes.append("TF→TF+P")
+        if tops["tf"] != tops["tfidf"]:
+            changes.append("TF→TF-IDF")
+        if tops["tfidf"] != tops["tfidf_proximity"]:
+            changes.append("TF-IDF→TF-IDF+P")
 
-        print(f"Query: '{query}'")
-        print(f"  Top tf result:                  {tf_top}")
-        print(f"  Top tf_proximity result:        {tf_prox_top}")
-        print(f"  Top tfidf result:               {tfidf_top}")
-        print(f"  Top tfidf_proximity result:     {tfidf_prox_top}")
-        print(f"  tf -> tf_proximity changed top rank:        {'yes' if changed_tf_prox else 'no'}")
-        print(f"  tf -> tfidf changed top rank:               {'yes' if changed_tfidf else 'no'}")
-        print(f"  tfidf -> tfidf_proximity changed top rank:  {'yes' if changed_tfidf_prox else 'no'}")
-        print()
+        table.add_row(
+            query,
+            tops["tf"],
+            tops["tf_proximity"],
+            tops["tfidf"],
+            tops["tfidf_proximity"],
+            ", ".join(changes) if changes else "None",
+        )
+
+    console.print(table)
+
+
+def run_benchmarks(index) -> dict[str, dict[str, dict[str, float]]]:
+    timing_results: dict[str, dict[str, dict[str, float]]] = {}
+
+    with console.status("[bold cyan]Warming up benchmark...[/bold cyan]"):
+        warmup(index, QUERIES, RANKINGS, WARMUP_RUNS)
+
+    with console.status("[bold cyan]Running benchmark...[/bold cyan]"):
+        for ranking in RANKINGS:
+            timing_results[ranking] = {}
+            for query in QUERIES:
+                timing_results[ranking][query] = benchmark_query(
+                    index=index,
+                    query=query,
+                    ranking=ranking,
+                    repetitions=REPETITIONS,
+                )
+
+    return timing_results
 
 
 def main() -> None:
@@ -191,29 +245,22 @@ def main() -> None:
         )
 
     index = load_index(INDEX_PATH)
+    print_header(index)
 
-    print(f"Loaded index with {len(index.documents)} documents and {len(index.index)} terms.")
-    print(f"Benchmarking {len(QUERIES)} queries over {REPETITIONS} repetitions each.")
-    print(f"Warm-up runs: {WARMUP_RUNS}\n")
+    results = run_benchmarks(index)
 
-    warmup(index, QUERIES, RANKINGS, WARMUP_RUNS)
-
-    timing_results: dict[str, dict[str, dict[str, float]]] = {}
-
-    for ranking in RANKINGS:
-        timing_results[ranking] = {}
-        for query in QUERIES:
-            timing_results[ranking][query] = benchmark_query(
-                index=index,
-                query=query,
-                ranking=ranking,
-                repetitions=REPETITIONS,
-            )
-
-    print_timing_table(timing_results)
-    print_relative_speed_summary(timing_results)
-    print_top_results(index)
+    print_timing_summary(results)
+    print_timing_details(results)
     print_difference_analysis(index)
+    print_top_results(index)
+
+    console.print(
+        Panel.fit(
+            "[green]Benchmark complete[/green]\n"
+            "All timings are reported in milliseconds per query.",
+            border_style="green",
+        )
+    )
 
 
 if __name__ == "__main__":
