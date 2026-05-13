@@ -15,8 +15,8 @@ A Python-based command-line search engine that crawls a website, builds a positi
 ## Setup
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 

@@ -1,5 +1,120 @@
 from src.indexer import InvertedIndex
 
+def test_get_postings_is_case_insensitive() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "Life is good", "Doc 1")
+
+    assert index.get_postings("LIFE") == index.get_postings("life")
+
+
+def test_find_documents_returns_empty_for_empty_terms() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "hello world", "Doc 1")
+
+    assert index.find_documents_containing_all([]) == []
+
+
+def test_rank_term_frequency_handles_missing_term() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "hello world", "Doc 1")
+
+    ranked = index.rank_documents_by_term_frequency(["hello", "missing"], ["doc1"])
+
+    assert ranked == [("doc1", 1)]
+
+
+def test_inverse_document_frequency_returns_zero_for_missing_term() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "hello world", "Doc 1")
+
+    assert index.inverse_document_frequency("missing") == 0.0
+
+
+def test_inverse_document_frequency_returns_zero_for_zero_doc_freq() -> None:
+    index = InvertedIndex()
+    index.index["broken"] = {"doc_freq": 0, "postings": {}}
+
+    assert index.inverse_document_frequency("broken") == 0.0
+
+
+def test_tfidf_handles_zero_length_document() -> None:
+    index = InvertedIndex()
+    index.documents["doc1"] = {"title": "Empty", "word_count": 0}
+    index.index["hello"] = {
+        "doc_freq": 1,
+        "postings": {
+            "doc1": {
+                "term_freq": 1,
+                "positions": [0],
+            }
+        },
+    }
+
+    ranked = index.rank_documents_by_tfidf(["hello"], ["doc1"])
+
+    assert ranked == [("doc1", 0.0)]
+
+
+def test_minimum_position_distance_returns_none_for_empty_positions() -> None:
+    assert InvertedIndex.minimum_position_distance([], [1, 2, 3]) is None
+    assert InvertedIndex.minimum_position_distance([1, 2, 3], []) is None
+
+
+def test_minimum_position_distance_handles_overlapping_positions() -> None:
+    assert InvertedIndex.minimum_position_distance([1, 5, 9], [2, 5, 10]) == 0
+
+
+def test_proximity_bonus_returns_zero_for_single_term_query() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "good friends", "Doc 1")
+
+    assert index.proximity_bonus(["good"], "doc1") == 0.0
+
+
+def test_proximity_bonus_returns_zero_for_missing_document() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "good friends", "Doc 1")
+
+    assert index.proximity_bonus(["good", "friends"], "missing-doc") == 0.0
+
+
+def test_proximity_bonus_returns_zero_for_missing_term() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "good friends", "Doc 1")
+
+    assert index.proximity_bonus(["good", "missing"], "doc1") == 0.0
+
+
+def test_tfidf_with_proximity_handles_missing_term() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "good friends", "Doc 1")
+
+    docs = ["doc1"]
+    ranked = index.rank_documents_by_tfidf_with_proximity(
+        ["good", "missing"],
+        docs,
+    )
+
+    assert len(ranked) == 1
+    assert ranked[0][0] == "doc1"
+
+
+def test_tf_with_proximity_returns_float_scores() -> None:
+    index = InvertedIndex()
+    index.add_document("doc1", "good friends", "Doc 1")
+
+    docs = index.find_documents_containing_all(["good", "friends"])
+    ranked = index.rank_documents_by_tf_with_proximity(["good", "friends"], docs)
+
+    assert isinstance(ranked[0][1], float)
+    assert ranked[0][1] > 2.0
+
+
+def test_from_dict_handles_missing_keys() -> None:
+    index = InvertedIndex.from_dict({})
+
+    assert index.index == {}
+    assert index.documents == {}
 
 def test_tokenize_lowercases_and_removes_punctuation() -> None:
     text = "Good friends, GOOD books, and a sleepy conscience."
