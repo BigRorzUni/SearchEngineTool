@@ -219,63 +219,103 @@ Running this may not work correctly due to package imports:
 python src/main.py
 ```
 
-## Evaluation of Ranking Algorithms
+# Evaluation of Ranking Algorithms
 
 This project evaluates four ranking strategies:
 
-- **Term Frequency (TF)** — baseline ranking using summed term frequency
-- **TF + Proximity** — TF ranking enhanced with positional proximity
-- **TF-IDF** — ranking using inverse document frequency
-- **TF-IDF + Proximity** — ranking combining rarity and positional proximity
+- TF — baseline ranking using summed term frequency
+- TF + Proximity — TF ranking enhanced using positional scoring
+- TF-IDF — ranking using inverse document frequency
+- TF-IDF + Proximity — ranking combining rarity weighting and positional scoring
 
-The goal is to compare computational performance, retrieval quality, and algorithmic trade-offs.
+The goal was to compare computational performance, retrieval quality, and algorithmic trade-offs.
 
-### Methodology
+## Methodology
 
-A benchmark was conducted using representative queries:
+Benchmarks were conducted using representative query types:
 
 - single-term queries: `life`, `truth`
 - multi-term queries: `good friends`, `love life`, `make life`, `life truth`, `friend life`
-- common-word query: `the`
+- common-term queries: `the`, `the life, `the end`
 
-Each query was executed **1000 times**, with warm-up runs to reduce caching and interpreter effects.
+Each query was executed 1000 times with 100 warm-up runs to reduce interpreter and caching effects.
 
-### Computational Performance
+Benchmark configuration:
 
-| Ranking Method | Average Time per Query |
-|---|---:|
-| TF | 0.0086 ms |
-| TF + Proximity | 0.0148 ms |
-| TF-IDF | 0.0120 ms |
-| TF-IDF + Proximity | 0.0165 ms |
+- Documents indexed: 10
+- Indexed terms: 849
+- Queries benchmarked: 9
 
-Compared to TF:
+## Computational Performance
 
-- TF + Proximity is approximately **1.71× slower**
-- TF-IDF is approximately **1.39× slower**
-- TF-IDF + Proximity is approximately **1.91× slower**
+| Ranking Method | Average Mean | Median of Medians | Avg Std Dev | Slowdown vs TF |
+|---|---:|---:|---:|---:|
+| TF | 0.0039 ms | 0.0038 ms | 0.0008 ms | baseline |
+| TF + Proximity | 0.0087 ms | 0.0067 ms | 0.0018 ms | 2.26× |
+| TF-IDF | 0.0067 ms | 0.0067 ms | 0.0013 ms | 1.72× |
+| TF-IDF + Proximity | 0.0116 ms | 0.0087 ms | 0.0018 ms | 2.99× |
 
-All query times remain below **0.02 ms per query**, so the runtime overhead is negligible for this dataset.
+All query times remained below 0.02 milliseconds per query, so runtime overhead remained negligible for this dataset.
 
-Expected complexity trend:
+Observed complexity trend:
 
 ```text
 TF < TF-IDF ≈ TF + Proximity < TF-IDF + Proximity
 ```
 
-### Retrieval Quality Analysis
+TF is computationally simplest because it only sums term frequencies.
 
-For the query `the`, TF ranks documents by raw frequency, while TF-IDF down-weights this common low-information term.
+TF-IDF introduces inverse document frequency calculations, while proximity ranking requires positional comparisons between query terms.
 
-For multi-term queries, proximity scoring rewards documents where query terms occur close together. This improves phrase-like queries such as `good friends` and `love life`.
+Combining TF-IDF and proximity produced the highest computational cost because both rarity weighting and positional scoring are applied.
 
-Observed ranking changes include:
+## Retrieval Quality Analysis
 
-- `life`: TF selects `page/2`, while TF-IDF selects `page/10`
-- `love life`: TF selects `page/2`, while TF-IDF selects `page/5`
-- `make life`: TF-IDF selects `page/5`, while TF-IDF + Proximity selects `page/2`
+The benchmark also evaluated how ranking strategies affected retrieval quality.
 
-### Trade-Off Analysis
+For the query `the life`:
+
+- TF selected `page/2`
+- TF-IDF selected `page/10`
+
+This demonstrates how TF-IDF changes rankings by reducing the influence of the extremely common term the and placing greater emphasis on the more informative term life.
+
+For the query `good friends`:
+
+- TF selected `page/2`
+- TF + Proximity also selected `page/2`
+- however, the proximity score bonus increased because the terms appeared close together within the document
+
+This demonstrates how positional scoring can strengthen phrase-like matches even when ranking order remains unchanged.
+
+For the query `love life`:
+
+- TF selected `page/2`
+- TF-IDF selected `page/5`
+
+For the query `make life`:
+
+- TF-IDF selected `page/5`
+- TF-IDF + Proximity selected `page/2`
+
+This demonstrates how proximity scoring can change rankings by rewarding documents where query terms appear closer together.
+
+For common-term queries such as `the`:
+
+- TF selected `page/9`
+- TF-IDF selected `page/4`
+
+TF strongly favours repetition frequency, while TF-IDF reduces the influence of extremely common terms that appear across many documents.
+
+The query `the life` demonstrated the combined impact of rarity weighting and proximity scoring:
+
+- TF selected `page/2`
+- TF-IDF selected `page/10`
+- TF-IDF + Proximity still selected `page/10`, but significantly increased the score separation from other pages
+
+This demonstrates how TF-IDF prioritises informative terms while proximity scoring strengthens phrase-like matches.
+
+## Trade-Off Analysis
 
 | Aspect | TF | TF + Proximity | TF-IDF | TF-IDF + Proximity |
 |---|---|---|---|---|
@@ -285,29 +325,33 @@ Observed ranking changes include:
 | Multi-term query quality | Basic | Improved | Improved | Strongest |
 | Positional awareness | None | Yes | None | Yes |
 
-### Conclusion
+## Conclusion
 
-TF provides a fast baseline but suffers from frequency bias.
+TF provides a fast and simple baseline ranking strategy but suffers from frequency bias.
 
-TF-IDF improves ranking by incorporating term rarity.
+TF + Proximity improves phrase-like query handling by incorporating positional information into ranking decisions.
 
-Proximity scoring improves multi-term queries by using positional information.
+TF-IDF improves semantic relevance by incorporating term rarity into ranking decisions.
 
-TF-IDF + Proximity provides the most context-aware ranking while remaining fast enough for this dataset.
+TF-IDF + Proximity produced the most context-aware retrieval behaviour while remaining computationally inexpensive for the dataset used in this project.
 
-### Limitations
+## Limitations
 
-- small dataset size
-- benchmark timings are affected by interpreter noise
-- TF-IDF remains a bag-of-words model
-- proximity scoring only considers adjacent query terms
+Current limitations include:
 
-### Future Work
+- relatively small dataset size
+- benchmark timings affected by Python interpreter noise
+- TF-IDF remaining a bag-of-words model without semantic understanding
+- proximity scoring only considering adjacent query terms
+- no support for exact phrase search or synonym expansion
 
-Potential improvements include:
+## Future Work
 
-- exact phrase search
+Potential future improvements include:
+
+- exact phrase matching
 - more advanced proximity scoring
-- query expansion and synonym handling
+- stemming and stop-word removal
+- synonym expansion and query suggestion
 - evaluation on larger datasets
-- learning-based ranking approaches
+- semantic retrieval using embeddings or vector search

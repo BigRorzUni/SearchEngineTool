@@ -24,6 +24,8 @@ QUERIES = [
     "life truth",
     "friend life",
     "the",
+    'the life',
+    'the end'
 ]
 
 RANKINGS = ["tf", "tf_proximity", "tfidf", "tfidf_proximity"]
